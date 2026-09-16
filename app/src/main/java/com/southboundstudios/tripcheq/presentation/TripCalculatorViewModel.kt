@@ -39,23 +39,6 @@ class TripCalculatorViewModel(
         }
     }
 
-    fun selectVehicle(vehicleId: String) {
-        val vehicle = _uiState.value.vehicles.find { it.id == vehicleId }
-        _uiState.value = _uiState.value.copy(selectedVehicle = vehicle)
-    }
-
-    fun calculateCost(cityDist: Double, hwyDist: Double, fuelPrice: Double) {
-        val vehicle = _uiState.value.selectedVehicle ?: return
-        val params = FuelCostParams(
-            cityDistanceKm = cityDist,
-            highwayDistanceKm = hwyDist,
-            defaultCityKpl = vehicle.cityKpl,
-            defaultHighwayKpl = vehicle.highwayKpl,
-            defaultPricePerLiter = fuelPrice,
-        )
-        _uiState.value = _uiState.value.copy(costResult = calculateFuelCost(params))
-    }
-
     fun onSearchQueryChanged(query: String, isOrigin: Boolean) {
         _uiState.value = if (isOrigin) {
             _uiState.value.copy(originQuery = query, isSearchingOrigin = true)
@@ -64,25 +47,20 @@ class TripCalculatorViewModel(
         }
 
         searchJob?.cancel()
-
-        if (query.length < 3) {
+        if (query.trim().length < 3) {
             _uiState.value = _uiState.value.copy(searchSuggestions = emptyList())
             return
         }
 
         searchJob = viewModelScope.launch {
-            delay(timeMillis = 500)
-
+            delay(400)
             searchRepository.searchPlaces(query).onSuccess { results ->
                 _uiState.value = _uiState.value.copy(searchSuggestions = results)
             }
         }
     }
 
-    fun onPlaceSelected(
-        feature: GeocodingFeature,
-        isOrigin: Boolean,
-    ) {
+    fun onPlaceSelected(feature: GeocodingFeature, isOrigin: Boolean) {
         val lng = feature.geometry.coordinates[0]
         val lat = feature.geometry.coordinates[1]
 
@@ -99,59 +77,16 @@ class TripCalculatorViewModel(
                 searchSuggestions = emptyList(),
             )
         }
-
-        val state = _uiState.value
-        if (state.originCoordinates != null && state.destinationCoordinates != null) {
-            calculateTrip(
-                originLat = state.originCoordinates.first,
-                originLng = state.originCoordinates.second,
-                destLat = state.destinationCoordinates.first,
-                destLng = state.destinationCoordinates.second,
-            )
-        }
-    }
-
-    fun calculateTrip(
-        originLat: Double, originLng: Double,
-        destLat: Double, destLng: Double,
-    ) {
-        viewModelScope.launch {
-            val result = routeRepository.fetchRoute(originLat, originLng, destLat, destLng)
-
-            result.onSuccess { response ->
-                val route = response.routes.firstOrNull()
-
-                if (route != null) {
-                    val totalDistanceKm = route.distance / 1000.0
-                    val estimatedCityKm = totalDistanceKm * 0.40
-                    val estimatedHighwayKm = totalDistanceKm * 0.60
-                    val currentFuelPrice = 60.00
-                    val costResult = calculateFuelCost(
-                        FuelCostParams(
-                            cityDistanceKm = estimatedCityKm,
-                            highwayDistanceKm = estimatedHighwayKm,
-                            defaultCityKpl = _uiState.value.selectedVehicle?.cityKpl ?: 10.0,
-                            defaultHighwayKpl = _uiState.value.selectedVehicle?.highwayKpl ?: 15.0,
-                            defaultPricePerLiter = currentFuelPrice
-                        )
-                    )
-
-                    _uiState.value = _uiState.value.copy(
-                        encodedPolyline = route.geometry,
-                        costResult = costResult
-                    )
-                }
-            }.onFailure { error ->
-                // Handle API error state here
-            }
-        }
     }
 
     fun clearOrigin() {
         _uiState.value = _uiState.value.copy(
             originQuery = "",
             originCoordinates = null,
-            searchSuggestions = emptyList()
+            searchSuggestions = emptyList(),
+            encodedPolyline = null,
+            routeDistanceKm = null,
+            costResult = null
         )
     }
 
@@ -159,7 +94,104 @@ class TripCalculatorViewModel(
         _uiState.value = _uiState.value.copy(
             destinationQuery = "",
             destinationCoordinates = null,
-            searchSuggestions = emptyList()
+            searchSuggestions = emptyList(),
+            encodedPolyline = null,
+            routeDistanceKm = null,
+            costResult = null
         )
+    }
+
+    fun selectVehicle(vehicleId: String) {
+        val vehicle = _uiState.value.vehicles.find { it.id == vehicleId }
+        _uiState.value = _uiState.value.copy(
+            selectedVehicle = vehicle,
+            isCustomVehicle = false,
+        )
+    }
+
+    fun selectCustomVehicle() {
+        _uiState.value = _uiState.value.copy(
+            selectedVehicle = null,
+            isCustomVehicle = true,
+        )
+    }
+
+    fun onCustomCityKplChanged(value: String) {
+        if (value.isEmpty() || value.matches(Regex("^\\d*\\.?\\d*$"))) {
+            _uiState.value = _uiState.value.copy(customCityKpl = value)
+        }
+    }
+
+    fun onCustomHighwayKplChanged(value: String) {
+        if (value.isEmpty() || value.matches(Regex("^\\d*\\.?\\d*$"))) {
+            _uiState.value = _uiState.value.copy(customHighwayKpl = value)
+        }
+    }
+
+    fun calculateTrip() {
+        val state = _uiState.value
+        val origin = state.originCoordinates ?: return
+        val dest = state.destinationCoordinates ?: return
+
+        _uiState.value = _uiState.value.copy(isCalculating = true, errorMessage = null)
+
+        viewModelScope.launch {
+            val routeResult = routeRepository.fetchRoute(
+                originLat = origin.first,
+                originLng = origin.second,
+                destLat = dest.first,
+                destLng = dest.second,
+            )
+
+            routeResult.onSuccess { response ->
+                val route = response.routes.firstOrNull()
+                if (route == null) {
+                    _uiState.value = _uiState.value.copy(
+                        isCalculating = false,
+                        errorMessage = "No route found.",
+                    )
+                    return@launch
+                }
+
+                val totalKm = route.distance / 1000.0
+                val cityDist = totalKm * 0.45
+                val hwyDist = totalKm * 0.55
+                val fuelPrice = 80.00
+
+                val (cityKpl, hwyKpl) = if (state.isCustomVehicle) {
+                    Pair(
+                        state.customCityKpl.toDoubleOrNull() ?: 10.0,
+                        state.customHighwayKpl.toDoubleOrNull() ?: 15.0
+                    )
+                } else {
+                    Pair(
+                        state.selectedVehicle?.cityKpl ?: 10.0,
+                        state.selectedVehicle?.highwayKpl ?: 15.0
+                    )
+                }
+
+                val cost = calculateFuelCost(
+                    FuelCostParams(
+                        cityDistanceKm = cityDist,
+                        highwayDistanceKm = hwyDist,
+                        defaultCityKpl = cityKpl,
+                        defaultHighwayKpl = hwyKpl,
+                        defaultPricePerLiter = fuelPrice,
+                    )
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isCalculating = false,
+                    encodedPolyline = route.geometry,
+                    routeDistanceKm = totalKm,
+                    costResult = cost,
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(
+                    isCalculating = false,
+                    errorMessage = error.localizedMessage ?: "Failed to calculate route.",
+                )
+            }
+        }
     }
 }
