@@ -1,6 +1,10 @@
 package com.southboundstudios.tripcheq.di
 
+import com.southboundstudios.tripcheq.data.repository.RouteRepositoryImpl
+import com.southboundstudios.tripcheq.data.repository.SearchRepositoryImpl
 import com.southboundstudios.tripcheq.data.repository.TripRepositoryImpl
+import com.southboundstudios.tripcheq.domain.repository.RouteRepository
+import com.southboundstudios.tripcheq.domain.repository.SearchRepository
 import com.southboundstudios.tripcheq.domain.repository.TripRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
@@ -34,7 +38,19 @@ val networkModule = module {
         TripRepositoryImpl(
             httpClient = get(),
             vehicleDao = get(),
-            fuelRateDao = get()
+            fuelRateDao = get(),
+        )
+    }
+
+    single<RouteRepository> {
+        RouteRepositoryImpl(
+            httpClient = get(),
+        )
+    }
+
+    single<SearchRepository> {
+        SearchRepositoryImpl(
+            httpClient = get(),
         )
     }
 }

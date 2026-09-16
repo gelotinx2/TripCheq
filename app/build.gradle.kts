@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -19,6 +22,18 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val properties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            properties.load(FileInputStream(localPropertiesFile))
+        }
+
+        val mapboxToken = properties.getProperty("MAPBOX_TOKEN") ?: ""
+        buildConfigField("String", "MAPBOX_TOKEN", "\"$mapboxToken\"")
+
+        val mapTilerKey = properties.getProperty("MAPTILER_KEY") ?: ""
+        buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
     }
 
     //noinspection WrongGradleMethod
@@ -39,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
