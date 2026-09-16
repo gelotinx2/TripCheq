@@ -146,4 +146,20 @@ class TripCalculatorViewModel(
             }
         }
     }
+
+    fun clearOrigin() {
+        _uiState.value = _uiState.value.copy(
+            originQuery = "",
+            originCoordinates = null,
+            searchSuggestions = emptyList()
+        )
+    }
+
+    fun clearDestination() {
+        _uiState.value = _uiState.value.copy(
+            destinationQuery = "",
+            destinationCoordinates = null,
+            searchSuggestions = emptyList()
+        )
+    }
 }

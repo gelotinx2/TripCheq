@@ -5,8 +5,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.southboundstudios.tripcheq.presentation.TripUiState
 import com.southboundstudios.tripcheq.data.remote.dto.GeocodingFeature
+import com.southboundstudios.tripcheq.presentation.TripUiState
 
 @Composable
 fun TripControlSheet(
@@ -15,42 +15,48 @@ fun TripControlSheet(
     onDestinationQueryChanged: (String) -> Unit,
     onOriginSelected: (GeocodingFeature) -> Unit,
     onDestinationSelected: (GeocodingFeature) -> Unit,
+    onClearOrigin: () -> Unit,
+    onClearDestination: () -> Unit,
     onVehicleSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(16.dp),
     ) {
         Text("Plan Your Trip", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(16.dp))
 
-        AutocompleteTextField(
+        LocationSearchBar(
             query = uiState.originQuery,
             label = "Origin",
+            isLocked = uiState.originCoordinates != null,
             suggestions = uiState.searchSuggestions,
-            isDropdownExpanded = uiState.isSearchingOrigin && uiState.searchSuggestions.isNotEmpty(),
+            isShowingSuggestions = uiState.isSearchingOrigin,
             onQueryChanged = onOriginQueryChanged,
-            onSuggestionSelected = onOriginSelected
+            onSuggestionSelected = onOriginSelected,
+            onClear = onClearOrigin,
         )
 
         Spacer(Modifier.height(8.dp))
 
-        AutocompleteTextField(
+        LocationSearchBar(
             query = uiState.destinationQuery,
             label = "Destination",
+            isLocked = uiState.destinationCoordinates != null,
             suggestions = uiState.searchSuggestions,
-            isDropdownExpanded = !uiState.isSearchingOrigin && uiState.searchSuggestions.isNotEmpty(),
+            isShowingSuggestions = !uiState.isSearchingOrigin,
             onQueryChanged = onDestinationQueryChanged,
-            onSuggestionSelected = onDestinationSelected
+            onSuggestionSelected = onDestinationSelected,
+            onClear = onClearDestination,
         )
 
         Spacer(Modifier.height(16.dp))
 
         Text(
             text = "Vehicle: ${uiState.selectedVehicle?.make} ${uiState.selectedVehicle?.model} - ${uiState.selectedVehicle?.variant ?: ""}",
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
         )
 
         Spacer(Modifier.height(24.dp))
@@ -59,18 +65,18 @@ fun TripControlSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
         ) {
             Column(Modifier.padding(16.dp)) {
                 Text(
                     text = "Estimated Fuel Cost",
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "₱${uiState.costResult?.totalCostPeso ?: "0.00"}",
-                    style = MaterialTheme.typography.headlineLarge
+                    style = MaterialTheme.typography.headlineLarge,
                 )
 
                 if (uiState.costResult != null) {
@@ -78,7 +84,7 @@ fun TripControlSheet(
                     Text(
                         text = "${uiState.costResult.totalLitersConsumed} Liters consumed",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }

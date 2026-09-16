@@ -24,16 +24,18 @@ fun TripMainScreen(
                 onDestinationQueryChanged = { viewModel.onSearchQueryChanged(it, isOrigin = false) },
                 onOriginSelected = { viewModel.onPlaceSelected(it, isOrigin = true) },
                 onDestinationSelected = { viewModel.onPlaceSelected(it, isOrigin = false) },
-                onVehicleSelected = { viewModel.selectVehicle(it) },
+                onClearOrigin = { viewModel.clearOrigin() },
+                onClearDestination = { viewModel.clearDestination() },
+                onVehicleSelected = { viewModel.selectVehicle(it) }
             )
         },
-        sheetPeekHeight = 350.dp,
+        sheetPeekHeight = 350.dp
     ) { innerPadding ->
         TripMapScreen(
             encodedPolyline = uiState.encodedPolyline,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
         )
     }
 }
