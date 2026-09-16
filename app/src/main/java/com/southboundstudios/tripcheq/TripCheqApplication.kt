@@ -2,6 +2,8 @@ package com.southboundstudios.tripcheq
 
 import android.app.Application
 import com.southboundstudios.tripcheq.di.dataModule
+import com.southboundstudios.tripcheq.di.domainModule
+import com.southboundstudios.tripcheq.di.networkModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -12,7 +14,11 @@ class TripCheqApplication : Application() {
         startKoin {
             androidLogger()
             androidContext(this@TripCheqApplication)
-            modules(dataModule)
+            modules(
+                dataModule,
+                domainModule,
+                networkModule,
+            )
         }
     }
 }
