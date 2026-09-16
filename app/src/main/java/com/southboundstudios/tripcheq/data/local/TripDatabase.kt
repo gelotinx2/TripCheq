@@ -10,7 +10,7 @@ import com.southboundstudios.tripcheq.data.local.entity.VehicleEntity
 
 @Database(
     entities = [VehicleEntity::class, FuelRateEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(RoomConverters::class)

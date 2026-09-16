@@ -7,6 +7,7 @@ import com.southboundstudios.tripcheq.domain.model.FuelType
 @Entity(tableName = "vehicles")
 data class VehicleEntity(
     @PrimaryKey val id: String,
+    val type: String,
     val make: String,
     val model: String,
     val variant: String?,

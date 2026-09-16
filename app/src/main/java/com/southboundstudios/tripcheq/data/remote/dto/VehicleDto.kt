@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class VehicleDto(
     val id: String,
+    val type: String,
     val make: String,
     val model: String,
     val variant: String? = null,
@@ -26,6 +27,7 @@ data class VehicleDto(
 ) {
     fun toEntity() = VehicleEntity(
         id = id,
+        type = type,
         make = make,
         model = model,
         variant = variant,

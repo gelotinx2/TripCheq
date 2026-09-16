@@ -136,11 +136,14 @@ class TripCalculatorViewModel(
         _uiState.value = _uiState.value.copy(isCalculating = true, errorMessage = null)
 
         viewModelScope.launch {
+            val isMotorcycle = state.selectedVehicle?.type?.equals("Motorcycle", ignoreCase = true) == true
+
             val routeResult = routeRepository.fetchRoute(
                 originLat = origin.first,
                 originLng = origin.second,
                 destLat = dest.first,
                 destLng = dest.second,
+                avoidTolls = isMotorcycle,
             )
 
             routeResult.onSuccess { response ->

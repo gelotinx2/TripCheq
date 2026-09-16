@@ -12,7 +12,9 @@ val dataModule = module {
             androidContext(),
             TripDatabase::class.java,
             "tripcheq_db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     single { get<TripDatabase>().vehicleDao() }

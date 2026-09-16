@@ -6,5 +6,6 @@ interface RouteRepository {
     suspend fun fetchRoute(
         originLat: Double, originLng: Double,
         destLat: Double, destLng: Double,
+        avoidTolls: Boolean = false,
     ): Result<MapboxDirectionsResponse>
 }

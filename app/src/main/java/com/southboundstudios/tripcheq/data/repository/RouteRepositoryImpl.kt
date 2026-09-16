@@ -12,8 +12,11 @@ class RouteRepositoryImpl(
     private val httpClient: HttpClient
 ) : RouteRepository {
     override suspend fun fetchRoute(
-        originLat: Double, originLng: Double,
-        destLat: Double, destLng: Double
+        originLat: Double,
+        originLng: Double,
+        destLat: Double,
+        destLng: Double,
+        avoidTolls: Boolean,
     ): Result<MapboxDirectionsResponse> = runCatching {
 
         // Mapbox Format: {longitude},{latitude};{longitude},{latitude}
@@ -23,6 +26,9 @@ class RouteRepositoryImpl(
             parameter("access_token", MAPBOX_TOKEN)
             parameter("geometries", "polyline")
             parameter("overview", "full")
+            if (avoidTolls) {
+                parameter("exclude", "toll")
+            }
         }.body()
     }
 }
