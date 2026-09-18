@@ -26,6 +26,7 @@ class RouteRepositoryImpl(
             parameter("access_token", MAPBOX_TOKEN)
             parameter("geometries", "polyline")
             parameter("overview", "full")
+            parameter("steps", "true")
             if (avoidTolls) {
                 parameter("exclude", "toll")
             }

@@ -21,7 +21,7 @@ class SearchRepositoryImpl(
             parameter("access_token", MAPBOX_TOKEN)
             parameter("autocomplete", true)
             parameter("country", "ph")
-            parameter("types", "poi,address,place,neighborhood")
+            parameter("types", "poi,neighborhood,address,locality,place")
             parameter("proximity", "121.0000,14.4250")
             parameter("limit", 8)
         }.body()

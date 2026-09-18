@@ -5,5 +5,13 @@ import org.koin.androidx.viewmodel.dsl.viewModel
 import org.koin.dsl.module
 
 val presentationModule = module {
-    viewModel { TripCalculatorViewModel(get(), get(), get(), get()) }
+    viewModel {
+        TripCalculatorViewModel(
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+        )
+    }
 }

@@ -8,6 +8,8 @@ import com.southboundstudios.tripcheq.domain.repository.RouteRepository
 import com.southboundstudios.tripcheq.domain.repository.SearchRepository
 import com.southboundstudios.tripcheq.domain.repository.TripRepository
 import com.southboundstudios.tripcheq.domain.usecase.CalculateFuelCostUseCase
+import com.southboundstudios.tripcheq.domain.usecase.CalculateTollCostUseCase
+import com.southboundstudios.tripcheq.domain.usecase.TollResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +21,7 @@ class TripCalculatorViewModel(
     private val routeRepository: RouteRepository,
     private val searchRepository: SearchRepository,
     private val calculateFuelCost: CalculateFuelCostUseCase,
+    private val calculateTollCost: CalculateTollCostUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TripUiState())
@@ -53,7 +56,7 @@ class TripCalculatorViewModel(
         }
 
         searchJob = viewModelScope.launch {
-            delay(400)
+            delay(timeMillis = 400)
             searchRepository.searchPlaces(query).onSuccess { results ->
                 _uiState.value = _uiState.value.copy(searchSuggestions = results)
             }
@@ -183,11 +186,20 @@ class TripCalculatorViewModel(
                     )
                 )
 
+                val tollResult = if (!isMotorcycle) {
+                    calculateTollCost(route, vehicleClass = 1)
+                } else {
+                    TollResult()
+                }
+
                 _uiState.value = _uiState.value.copy(
                     isCalculating = false,
                     encodedPolyline = route.geometry,
                     routeDistanceKm = totalKm,
                     costResult = cost,
+                    autosweepCost = tollResult.autosweepCost,
+                    easytripCost = tollResult.easytripCost,
+                    totalTollCost = tollResult.totalCost,
                 )
             }.onFailure { error ->
                 _uiState.value = _uiState.value.copy(

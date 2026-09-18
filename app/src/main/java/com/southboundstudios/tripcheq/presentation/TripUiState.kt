@@ -21,6 +21,9 @@ data class TripUiState(
     val encodedPolyline: String? = null,
     val routeDistanceKm: Double? = null,
     val costResult: FuelCostResult? = null,
+    val autosweepCost: Double = 0.0,
+    val easytripCost: Double = 0.0,
+    val totalTollCost: Double = 0.0,
     val errorMessage: String? = null,
 ) {
     val canCalculate: Boolean
@@ -34,4 +37,7 @@ data class TripUiState(
             }
             return hasCoords && hasValidVehicle && !isCalculating
         }
+
+    val grandTotal: Double
+        get() = (costResult?.totalCostPeso ?: 0.0) + totalTollCost
 }

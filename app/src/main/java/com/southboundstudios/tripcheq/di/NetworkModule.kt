@@ -39,6 +39,7 @@ val networkModule = module {
             httpClient = get(),
             vehicleDao = get(),
             fuelRateDao = get(),
+            tollDao = get(),
         )
     }
 

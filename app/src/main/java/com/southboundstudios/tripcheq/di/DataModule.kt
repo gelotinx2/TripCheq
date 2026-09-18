@@ -17,6 +17,7 @@ val dataModule = module {
             .build()
     }
 
-    single { get<TripDatabase>().vehicleDao() }
-    single { get<TripDatabase>().fuelRateDao() }
+    single { get<TripDatabase>().vehicleDao }
+    single { get<TripDatabase>().fuelRateDao }
+    single { get<TripDatabase>().tollDao }
 }
