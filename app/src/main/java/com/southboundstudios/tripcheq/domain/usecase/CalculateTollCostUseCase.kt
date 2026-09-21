@@ -5,6 +5,7 @@ import com.southboundstudios.tripcheq.data.local.dao.TollDao
 import com.southboundstudios.tripcheq.data.local.entity.TollRateEntity
 import com.southboundstudios.tripcheq.data.remote.dto.MapboxRouteDto
 import com.southboundstudios.tripcheq.data.remote.dto.MapboxIntersectionDto
+import com.southboundstudios.tripcheq.domain.util.TollRouteNormalizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -16,6 +17,7 @@ data class TollResult(
 
 class CalculateTollCostUseCase(
     private val tollDao: TollDao,
+    private val normalizer: TollRouteNormalizer = TollRouteNormalizer()
 ) {
     suspend operator fun invoke(route: MapboxRouteDto, vehicleClass: Int = 1): TollResult = withContext(Dispatchers.IO) {
         var autosweepTotal = 0.0
@@ -55,42 +57,34 @@ class CalculateTollCostUseCase(
             return@withContext TollResult()
         }
 
-        // --- PHASE 2: GRAPH PRE-LOAD ---
-        Log.d("TollDebug", "[PHASE 2] Loading Database for Graph Pathfinding...")
+        // --- PHASE 2: APPLY METRO MANILA TOLL RULES ---
+        Log.d("TollDebug", "[PHASE 2] Applying Toll Route Rules...")
+        val billedLegs = normalizer.normalize(resolvedBooths)
+
+        // --- PHASE 3: GRAPH PRE-LOAD ---
+        Log.d("TollDebug", "[PHASE 3] Loading Database for Graph Pathfinding...")
         val allRates = tollDao.getAllRates()
         val graph = allRates.groupBy { it.entryName.lowercase() }
-        Log.d("TollDebug", "[PHASE 2] Loaded ${allRates.size} rates into Graph Memory.")
+        Log.d("TollDebug", "[PHASE 3] Loaded ${allRates.size} rates into Graph Memory.")
 
-        // --- PHASE 3: THE SLIDING WINDOW MATCHER ---
-        Log.d("TollDebug", "[PHASE 3] Starting Sliding Window Analysis...")
-        var i = 0
-        while (i < resolvedBooths.size) {
-            val officialEntry = resolvedBooths[i]
-            Log.d("TollDebug", "\n--- Analyzing Window Starting at Index $i: [$officialEntry] ---")
+        // --- PHASE 4: CALCULATE COSTS FROM NORMALIZED LEGS ---
+        Log.d("TollDebug", "[PHASE 4] Calculating Costs for Billed Legs...")
+        for (leg in billedLegs) {
+            Log.d("TollDebug", "\n  Processing Leg: [${leg.entry}] -> [${leg.exit}] (${leg.note})")
 
-            var matchFound = false
+            // 1. Try Direct Database Match
+            val directRate = tollDao.getRate(leg.entry, leg.exit)
 
-            for (j in i + 1 until resolvedBooths.size) {
-                val officialExit = resolvedBooths[j]
-                Log.d("TollDebug", "  Trying Target Exit Index $j: [$officialExit]")
-
-                // 1. Try Direct Database Match
-                val directRate = tollDao.getRate(officialEntry, officialExit)
-
-                if (directRate != null) {
-                    processPayment(directRate, vehicleClass) { cost, operator ->
-                        Log.d("TollDebug", "  => DIRECT MATCH SUCCESS! $operator - ₱$cost")
-                        if (operator.equals("Autosweep", ignoreCase = true)) autosweepTotal += cost
-                        else if (operator.equals("Easytrip", ignoreCase = true)) easytripTotal += cost
-                    }
-                    i = j
-                    matchFound = true
-                    break
+            if (directRate != null) {
+                processPayment(directRate, vehicleClass) { cost, operator ->
+                    Log.d("TollDebug", "  => DIRECT MATCH SUCCESS! $operator - ₱$cost")
+                    if (operator.equals("Autosweep", ignoreCase = true)) autosweepTotal += cost
+                    else if (operator.equals("Easytrip", ignoreCase = true)) easytripTotal += cost
                 }
-
-                // 2. Try BFS Graph Pathfinding (Handles SLEX -> Skyway -> NLEX transitions)
+            } else {
+                // 2. Try BFS Graph Pathfinding (Handles unmapped system transitions)
                 Log.d("TollDebug", "  => No direct match. Initiating BFS Graph Search...")
-                val path = findSeamlessPath(officialEntry, officialExit, graph)
+                val path = findSeamlessPath(leg.entry, leg.exit, graph)
 
                 if (path != null) {
                     Log.d("TollDebug", "  => SEAMLESS GRAPH PATH FOUND! Hops: ${path.size}")
@@ -101,25 +95,9 @@ class CalculateTollCostUseCase(
                             else if (operator.equals("Easytrip", ignoreCase = true)) easytripTotal += cost
                         }
                     }
-                    i = j
-                    matchFound = true
-                    break
-                }
-            }
-
-            if (!matchFound) {
-                // 3. Check Flat Rate Systems (e.g., NAIAX)
-                val flatRate = tollDao.getRate(officialEntry, officialEntry)
-                if (flatRate != null) {
-                    processPayment(flatRate, vehicleClass) { cost, operator ->
-                        Log.d("TollDebug", "  => FLAT RATE MATCH! $operator - ₱$cost for [$officialEntry]")
-                        if (operator.equals("Autosweep", ignoreCase = true)) autosweepTotal += cost
-                        else if (operator.equals("Easytrip", ignoreCase = true)) easytripTotal += cost
-                    }
                 } else {
-                    Log.d("TollDebug", "  => Booth [$officialEntry] bypassed (Intermediate barrier or missing alias).")
+                    Log.d("TollDebug", "  => ERROR: Leg [${leg.entry}] -> [${leg.exit}] bypassed (No direct or graph match).")
                 }
-                i++
             }
         }
 
