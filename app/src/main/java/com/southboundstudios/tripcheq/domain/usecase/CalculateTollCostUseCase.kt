@@ -41,12 +41,23 @@ class CalculateTollCostUseCase(
 
         // Normalize every booth name using toll_aliases right away
         val resolvedBooths = tollBooths.mapNotNull { booth ->
-            val rawName = booth.tollCollection?.name ?: "${booth.location[0]},${booth.location[1]}"
-            val official = tollDao.getOfficialName(rawName) ?: rawName
+            val mapboxName = booth.tollCollection?.name
+            val rawWithSpace = mapboxName ?: "${booth.location[0]}, ${booth.location[1]}"
+            val rawNoSpace = mapboxName ?: "${booth.location[0]},${booth.location[1]}"
 
-            // Skip GPS coordinate fallbacks if they aren't real plazas
-            if (rawName.contains(",")) null else official
-        }.distinct() // Remove consecutive duplicate triggers from Mapbox
+            var official = tollDao.getOfficialName(rawWithSpace)
+            if (official == null) {
+                official = tollDao.getOfficialName(rawNoSpace)
+            }
+
+            val finalName = official ?: rawWithSpace
+
+            if (finalName == rawWithSpace && finalName.contains(",")) {
+                null
+            } else {
+                finalName
+            }
+        }.distinct()
 
         resolvedBooths.forEachIndexed { index, name ->
             Log.d("TollDebug", "   -> Normalized Booth $index: [$name]")

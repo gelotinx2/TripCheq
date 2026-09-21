@@ -1,39 +1,17 @@
 package com.southboundstudios.tripcheq.presentation
 
 import android.annotation.SuppressLint
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.BottomSheetScaffold
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
-import androidx.compose.material3.DividerDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.animation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.southboundstudios.tripcheq.presentation.map.TripMapScreen
 import com.southboundstudios.tripcheq.presentation.sheet.TripControlSheet
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 @SuppressLint("DefaultLocale")
@@ -43,8 +21,18 @@ fun TripMainScreen(
     viewModel: TripCalculatorViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
+
+    val sheetState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.Expanded,
+        skipHiddenState = true
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
 
     BottomSheetScaffold(
+        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = 56.dp,
         sheetContent = {
             TripControlSheet(
                 uiState = uiState,
@@ -54,14 +42,19 @@ fun TripMainScreen(
                 onDestinationSelected = { viewModel.onPlaceSelected(it, isOrigin = false) },
                 onClearOrigin = { viewModel.clearOrigin() },
                 onClearDestination = { viewModel.clearDestination() },
+                onSwapLocations = { viewModel.swapLocations() },
                 onVehicleSelected = { viewModel.selectVehicle(it) },
                 onSelectCustomVehicle = { viewModel.selectCustomVehicle() },
                 onCustomCityKplChanged = { viewModel.onCustomCityKplChanged(it) },
                 onCustomHighwayKplChanged = { viewModel.onCustomHighwayKplChanged(it) },
-                onCalculateClicked = { viewModel.calculateTrip() },
+                onCalculateClicked = {
+                    viewModel.calculateTrip()
+                    coroutineScope.launch {
+                        scaffoldState.bottomSheetState.partialExpand()
+                    }
+                },
             )
         },
-        sheetPeekHeight = 360.dp,
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -123,7 +116,6 @@ fun TripMainScreen(
                         Spacer(Modifier.height(12.dp))
                         HorizontalDivider(
                             Modifier,
-                            DividerDefaults.Thickness,
                             color = MaterialTheme.colorScheme.outlineVariant,
                         )
                         Spacer(Modifier.height(12.dp))

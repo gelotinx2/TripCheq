@@ -131,6 +131,21 @@ class TripCalculatorViewModel(
         }
     }
 
+    fun swapLocations() {
+        val currentOriginQuery = _uiState.value.originQuery
+        val currentOriginCoords = _uiState.value.originCoordinates
+
+        _uiState.value = _uiState.value.copy(
+            originQuery = _uiState.value.destinationQuery,
+            originCoordinates = _uiState.value.destinationCoordinates,
+            destinationQuery = currentOriginQuery,
+            destinationCoordinates = currentOriginCoords,
+            encodedPolyline = null,
+            routeDistanceKm = null,
+            costResult = null,
+        )
+    }
+
     fun calculateTrip() {
         val state = _uiState.value
         val origin = state.originCoordinates ?: return
