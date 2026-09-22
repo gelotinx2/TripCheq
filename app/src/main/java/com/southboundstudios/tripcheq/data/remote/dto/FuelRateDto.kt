@@ -19,6 +19,6 @@ data class FuelRateDto(
         fuelType = FuelType.fromString(fuelType),
         region = region,
         pricePerLiter = pricePerLiter,
-        updatedAt = Instant.parse(updatedAt).toEpochMilli(),
+        updatedAt = Instant.parse(updatedAt.replace("+00:00", "Z")).toEpochMilli(),
     )
 }
