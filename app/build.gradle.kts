@@ -34,6 +34,15 @@ android {
 
         val mapTilerKey = properties.getProperty("MAPTILER_KEY") ?: ""
         buildConfigField("String", "MAPTILER_KEY", "\"$mapTilerKey\"")
+
+        val dbUrl = properties.getProperty("DB_URL") ?: ""
+        buildConfigField("String", "DB_URL", "\"$dbUrl\"")
+
+        val dbKey = properties.getProperty("DB_KEY") ?: ""
+        buildConfigField("String", "DB_KEY", "\"$dbKey\"")
+
+        val dbAuth = properties.getProperty("DB_AUTH") ?: ""
+        buildConfigField("String", "DB_AUTH", "\"$dbAuth\"")
     }
 
     //noinspection WrongGradleMethod
