@@ -1,6 +1,5 @@
 package com.southboundstudios.tripcheq.presentation.sheet
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,28 +14,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.southboundstudios.tripcheq.data.remote.dto.GeocodingFeature
+import com.southboundstudios.tripcheq.presentation.CommutePriority
+import com.southboundstudios.tripcheq.presentation.TripMode
 import com.southboundstudios.tripcheq.presentation.TripUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripControlSheet(
     uiState: TripUiState,
+    onModeChanged: (TripMode) -> Unit,
     onOriginQueryChanged: (String) -> Unit,
     onDestinationQueryChanged: (String) -> Unit,
     onOriginSelected: (GeocodingFeature) -> Unit,
     onDestinationSelected: (GeocodingFeature) -> Unit,
     onClearOrigin: () -> Unit,
     onClearDestination: () -> Unit,
-    onSwapLocations: () -> Unit, // NEW PARAMETER
+    onSwapLocations: () -> Unit,
     onVehicleSelected: (String) -> Unit,
     onSelectCustomVehicle: () -> Unit,
     onCustomCityKplChanged: (String) -> Unit,
     onCustomHighwayKplChanged: (String) -> Unit,
+    onDiscountToggled: (Boolean) -> Unit,
+    onPrioritySelected: (CommutePriority) -> Unit,
     onCalculateClicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var vehicleMenuExpanded by remember { mutableStateOf(false) }
-    var showCustomVehiclePrompt by remember { mutableStateOf(false) } // MODAL STATE
+    var showCustomVehiclePrompt by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
     if (showCustomVehiclePrompt) {
@@ -60,10 +64,28 @@ fun TripControlSheet(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .imePadding() // Pushes content above keyboard
-            .verticalScroll(scrollState), // Allows scrolling when keyboard is open
+            .imePadding()
+            .verticalScroll(scrollState),
     ) {
-        Text("Plan Your Trip", style = MaterialTheme.typography.titleLarge)
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            SegmentedButton(
+                selected = uiState.selectedMode == TripMode.DRIVE,
+                onClick = { onModeChanged(TripMode.DRIVE) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+            ) {
+                Text("Drive")
+            }
+            SegmentedButton(
+                selected = uiState.selectedMode == TripMode.COMMUTE,
+                onClick = { onModeChanged(TripMode.COMMUTE) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+            ) {
+                Text("Pasada")
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
 
         LocationSearchBar(
@@ -77,7 +99,6 @@ fun TripControlSheet(
             onClear = onClearOrigin,
         )
 
-        // SWAP BUTTON
         Box(
             modifier = Modifier.fillMaxWidth().height(40.dp),
             contentAlignment = Alignment.Center
@@ -100,97 +121,134 @@ fun TripControlSheet(
 
         Spacer(Modifier.height(14.dp))
 
-        val vehicleLabel = when {
-            uiState.isCustomVehicle -> "Custom Vehicle (Manual km/L)"
-            uiState.selectedVehicle != null -> {
-                val v = uiState.selectedVehicle
-                "${v.make} ${v.model} ${v.variant ?: ""}".trim()
+        when (uiState.selectedMode) {
+            TripMode.DRIVE -> {
+                val vehicleLabel = when {
+                    uiState.isCustomVehicle -> "Custom Vehicle (Manual km/L)"
+                    uiState.selectedVehicle != null -> {
+                        val v = uiState.selectedVehicle
+                        "${v.make} ${v.model} ${v.variant ?: ""}".trim()
+                    }
+                    else -> "Select a Vehicle"
+                }
+
+                ExposedDropdownMenuBox(
+                    expanded = vehicleMenuExpanded,
+                    onExpandedChange = { vehicleMenuExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = vehicleLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Vehicle") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = vehicleMenuExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = vehicleMenuExpanded,
+                        onDismissRequest = { vehicleMenuExpanded = false },
+                    ) {
+                        uiState.vehicles.forEach { vehicle ->
+                            DropdownMenuItem(
+                                text = { Text("${vehicle.make} ${vehicle.model} ${vehicle.variant ?: ""}".trim()) },
+                                onClick = {
+                                    onVehicleSelected(vehicle.id)
+                                    vehicleMenuExpanded = false
+                                },
+                            )
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Custom Vehicle...") },
+                            onClick = {
+                                onSelectCustomVehicle()
+                                vehicleMenuExpanded = false
+                            },
+                        )
+                    }
+                }
+
+                val displayCityKpl = if (uiState.isCustomVehicle) uiState.customCityKpl else uiState.selectedVehicle?.cityKpl?.toString() ?: ""
+                val displayHighwayKpl = if (uiState.isCustomVehicle) uiState.customHighwayKpl else uiState.selectedVehicle?.highwayKpl?.toString() ?: ""
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = displayCityKpl,
+                            onValueChange = onCustomCityKplChanged,
+                            label = { Text("City km/L") },
+                            readOnly = !uiState.isCustomVehicle,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
+                            ),
+                        )
+                        if (!uiState.isCustomVehicle) {
+                            Box(modifier = Modifier.matchParentSize().clickable { showCustomVehiclePrompt = true })
+                        }
+                    }
+
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = displayHighwayKpl,
+                            onValueChange = onCustomHighwayKplChanged,
+                            label = { Text("Hwy km/L") },
+                            readOnly = !uiState.isCustomVehicle,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
+                            ),
+                        )
+                        if (!uiState.isCustomVehicle) {
+                            Box(modifier = Modifier.matchParentSize().clickable { showCustomVehiclePrompt = true })
+                        }
+                    }
+                }
             }
-            else -> "Select a Vehicle"
-        }
 
-        ExposedDropdownMenuBox(
-            expanded = vehicleMenuExpanded,
-            onExpandedChange = { vehicleMenuExpanded = it },
-        ) {
-            OutlinedTextField(
-                value = vehicleLabel,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Vehicle") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = vehicleMenuExpanded) },
-                modifier = Modifier
-                    .menuAnchor()
-                    .fillMaxWidth(),
-            )
-
-            ExposedDropdownMenu(
-                expanded = vehicleMenuExpanded,
-                onDismissRequest = { vehicleMenuExpanded = false },
-            ) {
-                uiState.vehicles.forEach { vehicle ->
-                    DropdownMenuItem(
-                        text = { Text("${vehicle.make} ${vehicle.model} ${vehicle.variant ?: ""}".trim()) },
-                        onClick = {
-                            onVehicleSelected(vehicle.id)
-                            vehicleMenuExpanded = false
-                        },
+            TripMode.COMMUTE -> {
+                // Preferences row: Priority Filter Chips + Discount Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = uiState.commutePreferences.priority == CommutePriority.FASTEST,
+                        onClick = { onPrioritySelected(CommutePriority.FASTEST) },
+                        label = { Text("Fastest") }
+                    )
+                    FilterChip(
+                        selected = uiState.commutePreferences.priority == CommutePriority.LEAST_TRANSFERS,
+                        onClick = { onPrioritySelected(CommutePriority.LEAST_TRANSFERS) },
+                        label = { Text("Least Transfers") }
                     )
                 }
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text("Custom Vehicle...") },
-                    onClick = {
-                        onSelectCustomVehicle()
-                        vehicleMenuExpanded = false
-                    },
-                )
-            }
-        }
 
-        val displayCityKpl = if (uiState.isCustomVehicle) uiState.customCityKpl else uiState.selectedVehicle?.cityKpl?.toString() ?: ""
-        val displayHighwayKpl = if (uiState.isCustomVehicle) uiState.customHighwayKpl else uiState.selectedVehicle?.highwayKpl?.toString() ?: ""
+                Spacer(Modifier.height(8.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // WRAPPED IN BOX TO INTERCEPT TAPS
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedTextField(
-                    value = displayCityKpl,
-                    onValueChange = onCustomCityKplChanged,
-                    label = { Text("City km/L") },
-                    readOnly = !uiState.isCustomVehicle,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                if (!uiState.isCustomVehicle) {
-                    Box(modifier = Modifier.matchParentSize().clickable { showCustomVehiclePrompt = true })
-                }
-            }
-
-            Box(modifier = Modifier.weight(1f)) {
-                OutlinedTextField(
-                    value = displayHighwayKpl,
-                    onValueChange = onCustomHighwayKplChanged,
-                    label = { Text("Hwy km/L") },
-                    readOnly = !uiState.isCustomVehicle,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = if (!uiState.isCustomVehicle) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else MaterialTheme.colorScheme.surface,
-                    ),
-                )
-                if (!uiState.isCustomVehicle) {
-                    Box(modifier = Modifier.matchParentSize().clickable { showCustomVehiclePrompt = true })
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Student / Senior / PWD (20% Off)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Switch(
+                        checked = uiState.commutePreferences.isDiscounted,
+                        onCheckedChange = onDiscountToggled
+                    )
                 }
             }
         }
@@ -209,7 +267,7 @@ fun TripControlSheet(
                     strokeWidth = 2.dp,
                 )
             } else {
-                Text("Calculate Route")
+                Text(if (uiState.selectedMode == TripMode.DRIVE) "Calculate Route" else "Find Jeepney Routes")
             }
         }
 

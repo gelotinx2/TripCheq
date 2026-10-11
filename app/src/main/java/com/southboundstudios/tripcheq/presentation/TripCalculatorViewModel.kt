@@ -1,5 +1,6 @@
 package com.southboundstudios.tripcheq.presentation
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.southboundstudios.tripcheq.data.remote.dto.GeocodingFeature
@@ -40,6 +41,37 @@ class TripCalculatorViewModel(
                 )
             }
         }
+    }
+
+    fun setTripMode(mode: TripMode) {
+        _uiState.value = _uiState.value.copy(
+            selectedMode = mode,
+            errorMessage = null,
+            encodedPolyline = null,
+            routeDistanceKm = null,
+            costResult = null,
+            transitResults = emptyList(),
+            selectedTransitRoute = null
+        )
+    }
+
+    fun onDiscountToggled(isDiscounted: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            commutePreferences = _uiState.value.commutePreferences.copy(isDiscounted = isDiscounted)
+        )
+    }
+
+    fun onPrioritySelected(priority: CommutePriority) {
+        _uiState.value = _uiState.value.copy(
+            commutePreferences = _uiState.value.commutePreferences.copy(priority = priority)
+        )
+    }
+
+    fun selectTransitRoute(result: TransitRouteResult) {
+        _uiState.value = _uiState.value.copy(
+            selectedTransitRoute = result,
+            encodedPolyline = result.slicedGeometry
+        )
     }
 
     fun onSearchQueryChanged(query: String, isOrigin: Boolean) {
@@ -89,7 +121,9 @@ class TripCalculatorViewModel(
             searchSuggestions = emptyList(),
             encodedPolyline = null,
             routeDistanceKm = null,
-            costResult = null
+            costResult = null,
+            transitResults = emptyList(),
+            selectedTransitRoute = null
         )
     }
 
@@ -100,7 +134,9 @@ class TripCalculatorViewModel(
             searchSuggestions = emptyList(),
             encodedPolyline = null,
             routeDistanceKm = null,
-            costResult = null
+            costResult = null,
+            transitResults = emptyList(),
+            selectedTransitRoute = null
         )
     }
 
@@ -143,6 +179,8 @@ class TripCalculatorViewModel(
             encodedPolyline = null,
             routeDistanceKm = null,
             costResult = null,
+            transitResults = emptyList(),
+            selectedTransitRoute = null
         )
     }
 
@@ -153,6 +191,14 @@ class TripCalculatorViewModel(
 
         _uiState.value = _uiState.value.copy(isCalculating = true, errorMessage = null)
 
+        when (state.selectedMode) {
+            TripMode.DRIVE -> calculateDriveTrip(origin, dest)
+            TripMode.COMMUTE -> calculateCommuteTrip(origin, dest)
+        }
+    }
+
+    private fun calculateDriveTrip(origin: Pair<Double, Double>, dest: Pair<Double, Double>) {
+        val state = _uiState.value
         viewModelScope.launch {
             val isMotorcycle = state.selectedVehicle?.type?.equals("Motorcycle", ignoreCase = true) == true
 
@@ -220,6 +266,55 @@ class TripCalculatorViewModel(
                 _uiState.value = _uiState.value.copy(
                     isCalculating = false,
                     errorMessage = error.localizedMessage ?: "Failed to calculate route.",
+                )
+            }
+        }
+    }
+
+    private fun calculateCommuteTrip(origin: Pair<Double, Double>, dest: Pair<Double, Double>) {
+        viewModelScope.launch {
+            Log.d("TransitDebug", "Calculating commute from (${origin.first}, ${origin.second}) to (${dest.first}, ${dest.second})")
+            try {
+                val routes = tripRepository.findTransitRoutes(
+                    origLng = origin.second,
+                    origLat = origin.first,
+                    destLng = dest.second,
+                    destLat = dest.first
+                )
+
+                if (routes.isEmpty()) {
+                    Log.w("TransitDebug", "No transit routes found matching coordinates within buffer.")
+                    _uiState.value = _uiState.value.copy(
+                        isCalculating = false,
+                        errorMessage = "No direct jeepney route found nearby."
+                    )
+                    return@launch
+                }
+
+                @Suppress("UNCHECKED_CAST")
+                val validRoutes = routes as List<TransitRouteResult>
+
+                var defaultRoute = validRoutes[0]
+                for (route in validRoutes) {
+                    if (!route.variantName.equals("Main", ignoreCase = true)) {
+                        defaultRoute = route
+                        break
+                    }
+                }
+
+                Log.d("TransitDebug", "Active route set to: ${defaultRoute.signboard} (${defaultRoute.variantName})")
+
+                _uiState.value = _uiState.value.copy(
+                    isCalculating = false,
+                    transitResults = validRoutes,
+                    selectedTransitRoute = defaultRoute,
+                    encodedPolyline = defaultRoute.slicedGeometry
+                )
+            } catch (e: Exception) {
+                Log.e("TransitDebug", "ViewModel error: ${e.message}", e)
+                _uiState.value = _uiState.value.copy(
+                    isCalculating = false,
+                    errorMessage = e.localizedMessage ?: "Failed to find transit routes."
                 )
             }
         }

@@ -10,11 +10,16 @@ import com.southboundstudios.tripcheq.data.remote.dto.ExpresswayDto
 import com.southboundstudios.tripcheq.data.remote.dto.TollRateDto
 import com.southboundstudios.tripcheq.data.remote.dto.TollAliasDto
 import com.southboundstudios.tripcheq.domain.repository.TripRepository
+import com.southboundstudios.tripcheq.presentation.TransitRouteResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import kotlinx.coroutines.flow.Flow
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class TripRepositoryImpl(
     private val httpClient: HttpClient,
@@ -87,5 +92,57 @@ class TripRepositoryImpl(
         }
 
         return result
+    }
+
+    override suspend fun findTransitRoutes(
+        origLng: Double,
+        origLat: Double,
+        destLng: Double,
+        destLat: Double
+    ): List<TransitRouteResult> {
+        return try {
+            val requestJson = buildJsonObject {
+                put("orig_lng", origLng)
+                put("orig_lat", origLat)
+                put("dest_lng", destLng)
+                put("dest_lat", destLat)
+                put("search_radius", 1500.0)
+            }.toString()
+
+            Log.d("TransitDebug", "--- OUTGOING RPC REQUEST ---")
+            Log.d("TransitDebug", "Endpoint: rpc/find_transit_routes")
+            Log.d("TransitDebug", "Payload: $requestJson")
+
+            val response = httpClient.post("rpc/find_transit_routes") {
+                header(io.ktor.http.HttpHeaders.ContentType, io.ktor.http.ContentType.Application.Json.toString())
+                setBody(requestJson)
+            }
+
+            val rawBody = response.body<String>()
+            Log.d("TransitDebug", "--- INCOMING RPC RESPONSE ---")
+            Log.d("TransitDebug", "HTTP Status: ${response.status}")
+            Log.d("TransitDebug", "Raw Body: $rawBody")
+
+            if (response.status.value in 200..299) {
+                val routes = Json {
+                    ignoreUnknownKeys = true
+                }.decodeFromString<List<TransitRouteResult>>(rawBody)
+
+                Log.d("TransitDebug", "Parsed Routes Count: ${routes.size}")
+                routes.forEachIndexed { index, route ->
+                    Log.d(
+                        "TransitDebug",
+                        "[$index] Route: ${route.routeName} | Variant: ${route.variantName} | Signboard: ${route.signboard} | Fare: ₱${route.fare} | Geom Length: ${route.slicedGeometry.length}"
+                    )
+                }
+                routes
+            } else {
+                Log.e("TransitDebug", "Supabase RPC Error: $rawBody")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            Log.e("TransitDebug", "Exception in findTransitRoutes: ${e.message}", e)
+            emptyList()
+        }
     }
 }
